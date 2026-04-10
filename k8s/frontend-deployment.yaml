@@ -1,0 +1,64 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  namespace: annotation-system
+  labels:
+    app: annotation-frontend
+spec:
+  selector:
+    app: annotation-frontend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 5173
+      protocol: TCP
+  type: LoadBalancer
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: annotation-frontend
+  namespace: annotation-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: annotation-frontend
+  template:
+    metadata:
+      labels:
+        app: annotation-frontend
+    spec:
+      containers:
+      - name: frontend
+        image: annotation-system-frontend:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 5173
+        env:
+        - name: VITE_API_BASE_URL
+          value: "http://backend-service:8000/api"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "250m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5173
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5173
+          initialDelaySeconds: 5
+          periodSeconds: 5

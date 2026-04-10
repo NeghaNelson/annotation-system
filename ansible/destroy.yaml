@@ -1,0 +1,45 @@
+---
+- name: Destroy Annotation System from Kubernetes
+  hosts: localhost
+  gather_facts: no
+  vars:
+    kubectl_context: minikube
+    namespace: annotation-system
+    kustomize_dir: ./k8s
+  
+  tasks:
+    - name: Check kubectl is available
+      shell: kubectl version --client
+      register: kubectl_version
+      changed_when: false
+      failed_when: kubectl_version.rc != 0
+
+    - name: Set kubectl context
+      shell: kubectl config use-context {{ kubectl_context }}
+      changed_when: false
+
+    - name: Delete kustomization resources
+      shell: kubectl delete -k {{ kustomize_dir }} --ignore-not-found=true
+      changed_when: true
+      register: delete_result
+
+    - name: Display deletion output
+      debug:
+        msg: "{{ delete_result.stdout }}"
+
+    - name: Wait for namespace deletion
+      shell: kubectl get ns {{ namespace }} 2>/dev/null || echo "Namespace deleted"
+      register: ns_check
+      until: "ns_check.stdout == 'Namespace deleted'"
+      retries: 10
+      delay: 5
+      changed_when: false
+
+    - name: Verify cleanup
+      shell: kubectl get all -n {{ namespace }} 2>/dev/null || echo "Namespace no longer exists"
+      register: cleanup_status
+      changed_when: false
+
+    - name: Display cleanup status
+      debug:
+        msg: "{{ cleanup_status.stdout }}"

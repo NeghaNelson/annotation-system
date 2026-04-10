@@ -1,0 +1,91 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: annotation-system
+  labels:
+    app: annotation-backend
+spec:
+  selector:
+    app: annotation-backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: annotation-backend
+  namespace: annotation-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: annotation-backend
+  template:
+    metadata:
+      labels:
+        app: annotation-backend
+    spec:
+      initContainers:
+      - name: migrate
+        image: annotation-system-backend:latest
+        imagePullPolicy: Never
+        command:
+          - python
+          - manage.py
+          - migrate
+        envFrom:
+        - configMapRef:
+            name: annotation-config
+        - secretRef:
+            name: annotation-secrets
+      containers:
+      - name: backend
+        image: annotation-system-backend:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8000
+        envFrom:
+        - configMapRef:
+            name: annotation-config
+        - secretRef:
+            name: annotation-secrets
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: media-storage
+          mountPath: /app/media
+        - name: static-storage
+          mountPath: /app/staticfiles
+        livenessProbe:
+          httpGet:
+            path: /api/health/
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health/
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: media-storage
+        persistentVolumeClaim:
+          claimName: media-storage-pvc
+      - name: static-storage
+        persistentVolumeClaim:
+          claimName: static-storage-pvc

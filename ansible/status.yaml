@@ -1,0 +1,54 @@
+---
+- name: Get Annotation System Status
+  hosts: localhost
+  gather_facts: no
+  vars:
+    namespace: annotation-system
+  
+  tasks:
+    - name: Get deployment status
+      kubernetes.core.k8s_info:
+        kind: Deployment
+        namespace: "{{ namespace }}"
+      register: deployments
+
+    - name: Display deployments
+      debug:
+        msg: |
+          Deployment: {{ item.metadata.name }}
+          Ready Replicas: {{ item.status.readyReplicas | default(0) }}/{{ item.spec.replicas }}
+          Status: {% if item.status.readyReplicas == item.spec.replicas %}Ready{% else %}Not Ready{% endif %}
+      loop: "{{ deployments.resources }}"
+
+    - name: Get pods status
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ namespace }}"
+      register: pods
+
+    - name: Display pods
+      debug:
+        msg: "Pod: {{ item.metadata.name }} - Phase: {{ item.status.phase }} - Ready: {{ item.status.conditions | selectattr('type', 'equalto', 'Ready') | map(attribute='status') | first | default('Unknown') }}"
+      loop: "{{ pods.resources }}"
+
+    - name: Get services
+      kubernetes.core.k8s_info:
+        kind: Service
+        namespace: "{{ namespace }}"
+      register: services
+
+    - name: Display services
+      debug:
+        msg: "Service: {{ item.metadata.name }} - Type: {{ item.spec.type }} - Cluster IP: {{ item.spec.clusterIP }} - Endpoints: {{ item.spec.ports[0].port }}:{{ item.spec.ports[0].targetPort }}"
+      loop: "{{ services.resources }}"
+
+    - name: Check persistent volumes
+      kubernetes.core.k8s_info:
+        kind: PersistentVolumeClaim
+        namespace: "{{ namespace }}"
+      register: pvcs
+
+    - name: Display PVCs
+      debug:
+        msg: "PVC: {{ item.metadata.name }} - Status: {{ item.status.phase }} - Storage: {{ item.spec.resources.requests.storage }}"
+      loop: "{{ pvcs.resources }}"

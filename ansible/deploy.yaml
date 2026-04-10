@@ -1,0 +1,107 @@
+---
+- name: Deploy Annotation System to Kubernetes
+  hosts: localhost
+  gather_facts: no
+  vars:
+    kubectl_context: minikube
+    namespace: annotation-system
+    kustomize_dir: ./k8s
+  
+  tasks:
+    - name: Check kubectl is available
+      shell: kubectl version --client
+      register: kubectl_version
+      changed_when: false
+      failed_when: kubectl_version.rc != 0
+
+    - name: Display kubectl version
+      debug:
+        msg: "{{ kubectl_version.stdout }}"
+
+    - name: Set kubectl context
+      shell: kubectl config use-context {{ kubectl_context }}
+      changed_when: false
+
+    - name: Create namespace
+      kubernetes.core.k8s:
+        name: "{{ namespace }}"
+        api_version: v1
+        kind: Namespace
+        state: present
+
+    - name: Apply kustomization
+      shell: kubectl apply -k {{ kustomize_dir }}
+      changed_when: true
+      register: kustomize_result
+
+    - name: Display kustomization output
+      debug:
+        msg: "{{ kustomize_result.stdout }}"
+
+    - name: Wait for postgres to be ready
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ namespace }}"
+        label_selectors:
+          - app=postgres
+      register: postgres_pods
+      until: postgres_pods.resources | length > 0 and postgres_pods.resources[0].status.phase == "Running"
+      retries: 30
+      delay: 5
+
+    - name: Wait for backend to be ready
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ namespace }}"
+        label_selectors:
+          - app=annotation-backend
+      register: backend_pods
+      until: backend_pods.resources | length > 0 and backend_pods.resources[0].status.phase == "Running"
+      retries: 30
+      delay: 5
+
+    - name: Wait for frontend to be ready
+      kubernetes.core.k8s_info:
+        kind: Pod
+        namespace: "{{ namespace }}"
+        label_selectors:
+          - app=annotation-frontend
+      register: frontend_pods
+      until: frontend_pods.resources | length > 0 and frontend_pods.resources[0].status.phase == "Running"
+      retries: 30
+      delay: 5
+
+    - name: Get all deployments
+      kubernetes.core.k8s_info:
+        kind: Deployment
+        namespace: "{{ namespace }}"
+      register: deployments
+
+    - name: Display deployment status
+      debug:
+        msg: "Deployment: {{ item.metadata.name }} - Replicas: {{ item.spec.replicas }}/{{ item.status.readyReplicas | default(0) }}"
+      loop: "{{ deployments.resources }}"
+
+    - name: Get all services
+      kubernetes.core.k8s_info:
+        kind: Service
+        namespace: "{{ namespace }}"
+      register: services
+
+    - name: Display service endpoints
+      debug:
+        msg: "Service: {{ item.metadata.name }} - IP: {{ item.spec.clusterIP }} - Type: {{ item.spec.type }}"
+      loop: "{{ services.resources }}"
+
+    - name: Verify deployment
+      shell: |
+        echo "=== Deployment Summary ==="
+        kubectl get all -n {{ namespace }}
+        echo ""
+        echo "=== PVC Status ==="
+        kubectl get pvc -n {{ namespace }}
+      register: deployment_summary
+
+    - name: Display deployment summary
+      debug:
+        msg: "{{ deployment_summary.stdout_lines }}"

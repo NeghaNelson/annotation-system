@@ -1,0 +1,44 @@
+---
+# Persistent Volume for PostgreSQL data
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: annotation-system
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 10Gi
+
+---
+# Persistent Volume for uploaded media files
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media-storage-pvc
+  namespace: annotation-system
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 20Gi
+
+---
+# Persistent Volume for static files
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: static-storage-pvc
+  namespace: annotation-system
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 5Gi
